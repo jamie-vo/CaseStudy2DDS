@@ -79,6 +79,8 @@ Reviewing the plots below, the numerical factors that appear to correlate with h
 * Total Working Years
 * Years at the Company
 * Years Since Last Promotion
+
+The were selected due to the clustering or correlation R2 of positive attrition.
 ```{r,warning=FALSE,message=FALSE}
 # differentiate colors by attrition
 my_cols <- c("#00AFBB", "#E7B800") 
@@ -143,11 +145,94 @@ graphing(data, categorical_variables)
 
 
 ``` 
+##### Test variables for relevance
+Pull the variables visually analyzed and test for relevance in the final model. Since we are testing for a categorical variable, KNN, is utlized. 
+
+Its determined that K-15 results is the best KNN-model. 
+```{r}
+variables_graphed <- subset(data, select = c(ID, Attrition, JobRole, MaritalStatus, OverTime, JobLevel, JobInvolvement, StockOptionLevel, WorkLifeBalance, MonthlyIncome, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion))
+
+# cross validation knn
+set.seed(7)
+splitPerc = .80
+
+#split data
+trainIndices = sample(1:dim(prepped_df)[1],round(splitPerc * dim(prepped_df)[1]))
+train = prepped_df[trainIndices,]
+test = prepped_df[-trainIndices,]
+
+# create dataframe to hold KNN results
+accs = data.frame(accuracy = numeric(20), k = numeric(20))
+
+# run KNN algorithm 
+for(i in 1:15)
+{
+  classifications = knn(train[,6:70],test[,6:70],train$Attrition, prob = TRUE, k = i)
+  table(test$Attrition,classifications)
+  CM = confusionMatrix(table(test$Attrition,classifications))
+  accs$accuracy[i] = CM$overall[1]
+  accs$specificity[i] = CM$byClass[2]
+  accs$sensitivity[i] = CM$byClass[1]
+  accs$k[i] = i
+}
+accs
+plot(accs$k,accs$accuracy, type = "l", xlab = "k", main="K Iterations and Accuracy") 
+```
+
+##### Test KNN against different seeds
+
+```{r}
+
+accs = data.frame(accuracy = numeric(20), k = numeric(20))
+# run KNN algorithm 
+for(i in 1:20)
+{
+  # set seed
+  accs
+  set.seed(i)
+  splitPerc = .80
+  
+  
+  #split data
+  trainIndices = sample(1:dim(prepped_df)[1],round(splitPerc * dim(prepped_df)[1]))
+  train = prepped_df[trainIndices,]
+  test = prepped_df[-trainIndices,]
+  
+  classifications = knn(train[,6:70],test[,6:70],train$Attrition, prob = TRUE, k = 15)
+  table(test$Attrition,classifications)
+  CM = confusionMatrix(table(test$Attrition,classifications))
+  accs$accuracy[i] = CM$overall[1]
+  accs$specificity[i] = CM$byClass[2]
+  accs$sensitivity[i] = CM$byClass[1]
+  accs$seed[i] = i
+}
+summary(accs)
+
+```
 
 
+# TESTING BOX ================================================================================================
+```{r}
+#TESTING BOX
+library(caret)
+library(class)
+library(dplyr)
+library(e1071)
+library(FNN) 
+library(gmodels) 
+library(psych)
+
+prepped_df <- subset(variables_graphed, select = -c(JobRole, MaritalStatus, OverTime, JobLevel, JobInvolvement, StockOptionLevel, WorkLifeBalance))
+need_dummycode <- c("JobRole", "MaritalStatus", "OverTime", "JobLevel", "JobInvolvement", "StockOptionLevel", "WorkLifeBalance")
+for (val in need_dummcode) {
+  temp <- as.data.frame(dummy.code(data[["JobRole"]]))
+  prepped_df <- cbind(prepped_df, temp)
+}
+head(prepped_df)
+```
 
 ## Data Conclusions
-
+***
 ### Attrition
 Attrition is defined as reducing/preventing voluntary employee turnover. Here, if the value is no, this means that the employee was not lost, and yes means that the company did lose the employee. 
 
