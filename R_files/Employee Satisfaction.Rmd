@@ -1,0 +1,237 @@
+---
+title: "Employee Satisfaction"
+author: "Jamie Vo"
+date: "4/14/2020"
+output: html_document
+---
+
+## Abstract
+***
+Checkout the presentation at: ......youtube video link
+
+## Introduction
+***
+## Data Description
+***
+#### Read in the data and load in all the libraries
+```{r,warning=FALSE,message=FALSE}
+# load in the libraries
+library(stringi)
+library(plotly)
+library(plyr)
+library(class)
+library(caret)
+library(e1071)
+library(gridExtra)
+library(grid)
+library(ggplot2)
+library(lattice)
+library(tidyverse)
+library(shinydashboard)
+library(shiny)
+library(glue)
+library(reshape)
+
+# read in the dataframe
+data = read.csv("../data_sets/CaseStudy2-data.csv",header = TRUE)
+```
+
+## EDA - Exploratory Data Analysis
+***
+### Clean Data
+After checking the data for duplicates and null values, it was determined that the data was clean and no additional 
+cleaning would be required.
+
+```{r}
+# check for unique employees only
+distinct_df<-distinct(data, EmployeeNumber)
+
+# check for complete observations 
+#df[complete.cases(data), ]
+
+```
+
+### Explore Data
+
+#### Set the datasets 
+##### categorical variables
+Attrition, BusinessTravel, Department, EducationField, Gender, JobRole, MaritalStatus, OverTime, JobLevel, JobSatisfaction, JobInvolvement, PerformanceRating, RelationshipSatisfaction,StandardHours, StockOptionLevel, NumCompaniesWorked, TrainingTimesLastYear, WorkLifeBalance, Education, YearsInCurrentRole, EnvironmentSatisfaction
+
+##### continuous variables
+ID, Age, Attrition, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager
+```{r}
+# create a dataframe with categorical, removing Over 18 and 
+categorical = subset(data, select = c(Attrition, BusinessTravel, Department, EducationField, Gender, JobRole, MaritalStatus, OverTime, JobLevel, JobSatisfaction, JobInvolvement, PerformanceRating, RelationshipSatisfaction, StockOptionLevel, NumCompaniesWorked, TrainingTimesLastYear, WorkLifeBalance, Education, YearsInCurrentRole, EnvironmentSatisfaction))
+
+# create a dataframe with all continuous
+continuous = subset(data, select = c(ID, Age, Attrition, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager, StandardHours) )
+
+```
+
+
+#### Determine relationships to Attrition
+
+##### Numerical relations
+Reviewing the plots below, the numerical factors that appear to correlate with higher attrition rates is:
+
+* Monthly Income
+* Percent Salary Hike
+* Total Working Years
+* Years at the Company
+* Years Since Last Promotion
+```{r,warning=FALSE,message=FALSE}
+# differentiate colors by attrition
+my_cols <- c("#00AFBB", "#E7B800") 
+
+df_attrition_no <- continuous %>% filter(Attrition == "No")
+df_attrition_yes <- continuous %>% filter(Attrition == "Yes")
+
+# Correlation panel
+panel.cor <- function(x, y){
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- round(cor(x, y), digits=2)
+    txt <- paste0("R = ", r)
+    cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+# Customize upper panel
+upper.panel<-function(x, y){
+  points(x,y, pch = 1, col = my_cols[continuous$Attrition])
+}
+# Create the plots
+#pairs(continuous[,1:5], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+#pairs(continuous[,5:14], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+#pairs(continuous[,10:14], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+
+# Customize upper panel
+upper.panel<-function(x, y){
+  points(x,y, pch = 1, col = my_cols[df_attrition_yes$Attrition])
+}
+pairs(df_attrition_yes[,1:5], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+pairs(df_attrition_yes[,5:10], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+pairs(df_attrition_yes[,10:15], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+```
+
+##### Categorical Relations
+It's apparent that only specific variables are significant in terms of attrition. They variables are listed below:
+* Job Role
+* Marital Status
+* Overtime
+* Job Level
+* Jon Involvement
+* Stock Option Level
+* Worklife balance, if it was a 1, the probability of attrition increased
+These variables has the most stark differences when it comes to the percentage differences between the variables.
+
+It is interesting to note that gender, education, and job satisfaction didn't have a major impact on attrition.
+
+```{r}
+
+#compare the plots with attrition being the explainatory factor (Categorical)
+data$AttritionF <- as.factor(data$Attrition)
+categorical_variables = colnames(categorical)
+
+graphing <- function(data, categorical_variables) {
+  for (val in categorical_variables) {
+    plot <- ggplot(data=data)+aes_string(val)+geom_bar(aes(fill=as.factor(AttritionF)), position="fill")+ ggtitle(glue("{val}"))
+    print(plot)
+  }
+}
+graphing(data, categorical_variables)
+
+
+
+``` 
+
+
+
+## Data Conclusions
+
+### Attrition
+Attrition is defined as reducing/preventing voluntary employee turnover. Here, if the value is no, this means that the employee was not lost, and yes means that the company did lose the employee. 
+
+#### Factors that Lead to Attrition
+```{r}
+
+```
+
+#### Model for Attrition Prediction
+```{r}
+
+```
+
+##### Predicting Attrition
+At minimum, the attrition should be at 60% and the sensitivity should be 60%.
+Aftering running the model to recieve predicted attrition values, the dataset was ordered by id and exported to a csv. 
+```{r}
+# load in the attrition data
+#attrition_competition = read.csv("../data_sets/CaseStudy2CompSet No Attrition.csv", header=TRUE)
+
+
+# order by id
+#attach(attrition_competition)
+#attrition_competition_ordered <- attrition_competition[order(ID),]
+
+# export the attrition predicted data
+#write.csv(attrition_competition_ordered, "../data_sets/output_data_sets/Case2Predictions_JamieVo Attrition.csv")
+
+```
+
+### Monthly Incomes
+
+#### Model for Monthly Incomes
+```{r}
+
+```
+
+
+##### Predicting Monthly Incomes
+The model attains a RMSE < $3000 for the training and the validation set.
+```{r}
+# load in the monthly income data
+#monthly_income_competition = read.csv("../data_sets/CaseStudy2CompSet No Salary.csv", header=TRUE)
+
+
+# order by id
+#attach(attrition_competition)
+#monthly_income_competition_ordered <- monthly_income_competition[order(ID),]
+
+# export the attrition predicted data
+#write.csv(monthly_income_competition_ordered, "../data_sets/output_data_sets/Case2Predictions_JamieVo Salary.csv")
+```
+
+#### Top 3 Factors that Lead to Turnover
+```{r}
+
+```
+
+#### Job Specific Trends
+```{r}
+
+```
+
+#### Additional Trends
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
