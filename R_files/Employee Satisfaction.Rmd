@@ -31,6 +31,10 @@ library(shinydashboard)
 library(shiny)
 library(glue)
 library(reshape)
+library(dplyr)
+library(FNN) 
+library(gmodels) 
+library(psych)
 
 # read in the dataframe
 data = read.csv("../data_sets/CaseStudy2-data.csv",header = TRUE)
@@ -47,7 +51,7 @@ cleaning would be required.
 distinct_df<-distinct(data, EmployeeNumber)
 
 # check for complete observations 
-#df[complete.cases(data), ]
+df[complete.cases(data), ]
 
 ```
 
@@ -61,10 +65,10 @@ Attrition, BusinessTravel, Department, EducationField, Gender, JobRole, MaritalS
 ID, Age, Attrition, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager
 ```{r}
 # create a dataframe with categorical, removing Over 18 and 
-categorical = subset(data, select = c(Attrition, BusinessTravel, Department, EducationField, Gender, JobRole, MaritalStatus, OverTime, JobLevel, JobSatisfaction, JobInvolvement, PerformanceRating, RelationshipSatisfaction, StockOptionLevel, NumCompaniesWorked, TrainingTimesLastYear, WorkLifeBalance, Education, YearsInCurrentRole, EnvironmentSatisfaction))
+categorical <- subset(data, select = c(Attrition, BusinessTravel, Department, EducationField, Gender, JobRole, MaritalStatus, OverTime, JobLevel, JobSatisfaction, JobInvolvement, PerformanceRating, RelationshipSatisfaction, StockOptionLevel, NumCompaniesWorked, TrainingTimesLastYear, WorkLifeBalance, Education, YearsInCurrentRole, EnvironmentSatisfaction))
 
 # create a dataframe with all continuous
-continuous = subset(data, select = c(ID, Age, Attrition, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager, StandardHours) )
+continuous <- subset(data, select = c(ID, Age, Attrition, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager, StandardHours) )
 
 ```
 
@@ -117,13 +121,12 @@ pairs(df_attrition_yes[,10:15], lower.panel = panel.cor, upper.panel = upper.pan
 
 ##### Categorical Relations
 It's apparent that only specific variables are significant in terms of attrition. They variables are listed below:
-* Job Role
-* Marital Status
-* Overtime
+* *Job Role
+* *Marital Status
+* *Overtime
 * Job Level
-* Jon Involvement
+* *Job Involvement
 * Stock Option Level
-* Worklife balance, if it was a 1, the probability of attrition increased
 These variables has the most stark differences when it comes to the percentage differences between the variables.
 
 It is interesting to note that gender, education, and job satisfaction didn't have a major impact on attrition.
@@ -148,88 +151,116 @@ graphing(data, categorical_variables)
 ##### Test variables for relevance
 Pull the variables visually analyzed and test for relevance in the final model. Since we are testing for a categorical variable, KNN, is utlized. 
 
-Its determined that K-15 results is the best KNN-model. 
-```{r}
-variables_graphed <- subset(data, select = c(ID, Attrition, JobRole, MaritalStatus, OverTime, JobLevel, JobInvolvement, StockOptionLevel, WorkLifeBalance, MonthlyIncome, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion))
 
+##### ETL 
+Scaling the data to prevent loss of patterns that would not been seen if not completed. Extract the data that's determined the most relevant from the analysis above.
+```{r}
+# Scale the data
+
+# scale the data
+data$MonthlyIncomeScaled <- scale(data$MonthlyIncome)
+data$PercentSalaryHikeScaled <- scale(data$PercentSalaryHike)
+data$TotalWorkingYearsScaled <- scale(data$TotalWorkingYears)
+data$YearsAtCompanyScaled <- scale(data$YearsAtCompany)
+data$YearsSinceLastPromotionScaled <- scale(data$YearsSinceLastPromotion)
+
+# grab all significant variables for testing
+variables_graphed <- subset(data, select = c(ID, Attrition, JobRole, MaritalStatus, OverTime, JobLevel, JobInvolvement, StockOptionLevel, WorkLifeBalance, MonthlyIncome, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, MonthlyIncomeScaled, PercentSalaryHikeScaled, TotalWorkingYearsScaled, YearsAtCompanyScaled, YearsSinceLastPromotionScaled))
+
+need_dummycode <- c("JobRole", "MaritalStatus", "OverTime")
+for (val in need_dummycode) {
+  temp <- as.data.frame(dummy.code(data[[val]]))
+  variables_graphed <- cbind(variables_graphed, temp)
+}
+colnames(variables_graphed)
+```
+
+
+Its determined that K-15 results is the best KNN-model. 
+* Monthly Salary
+* Overtime
+* Role
+
+at K = 7, seed = 7
+```{r}
 # cross validation knn
 set.seed(7)
 splitPerc = .80
 
 #split data
-trainIndices = sample(1:dim(prepped_df)[1],round(splitPerc * dim(prepped_df)[1]))
-train = prepped_df[trainIndices,]
-test = prepped_df[-trainIndices,]
+trainIndices = sample(1:dim(variables_graphed)[1],round(splitPerc * dim(variables_graphed)[1]))
+train = variables_graphed[trainIndices,]
+test = variables_graphed[-trainIndices,]
 
 # create dataframe to hold KNN results
 accs = data.frame(accuracy = numeric(20), k = numeric(20))
 
 # run KNN algorithm 
-for(i in 1:15)
+for(i in 1:20)
 {
-  classifications = knn(train[,6:70],test[,6:70],train$Attrition, prob = TRUE, k = i)
-  table(test$Attrition,classifications)
-  CM = confusionMatrix(table(test$Attrition,classifications))
-  accs$accuracy[i] = CM$overall[1]
-  accs$specificity[i] = CM$byClass[2]
-  accs$sensitivity[i] = CM$byClass[1]
-  accs$k[i] = i
+  classifications = knn(train[,c(32,33,15,20,21,22,23,24,25,26,27,28)],test[,c(32,33,15,20,21,22,23,24,25,26,27,28)],train$Attrition, prob = TRUE, k = i)
+  #print(table(test$Attrition,classifications))
+  tryCatch({ CM <- confusionMatrix(table(test$Attrition,classifications))
+    accs$accuracy[i] = CM$overall[1]
+    accs$specificity[i] = CM$byClass[2]
+    accs$sensitivity[i] = CM$byClass[1]
+    accs$k[i] = i}, 
+    error = function(e) {
+    accs$accuracy[i] = 0
+    accs$specificity[i] = 0
+    accs$sensitivity[i] = 0
+    accs$k[i] = 0
+    })
+  #CM <- confusionMatrix(table(test$Attrition,classifications))
 }
 accs
 plot(accs$k,accs$accuracy, type = "l", xlab = "k", main="K Iterations and Accuracy") 
+
+colnames(variables_graphed)
+
+train[,c(1,2,3)]
+train[,c(1,2,7)]
 ```
 
 ##### Test KNN against different seeds
 
 ```{r}
 
-accs = data.frame(accuracy = numeric(20), k = numeric(20))
+accs1 = data.frame(accuracy = numeric(20), k = numeric(20))
 # run KNN algorithm 
 for(i in 1:20)
 {
   # set seed
-  accs
   set.seed(i)
   splitPerc = .80
   
   
   #split data
-  trainIndices = sample(1:dim(prepped_df)[1],round(splitPerc * dim(prepped_df)[1]))
-  train = prepped_df[trainIndices,]
-  test = prepped_df[-trainIndices,]
-  
-  classifications = knn(train[,6:70],test[,6:70],train$Attrition, prob = TRUE, k = 15)
-  table(test$Attrition,classifications)
-  CM = confusionMatrix(table(test$Attrition,classifications))
-  accs$accuracy[i] = CM$overall[1]
-  accs$specificity[i] = CM$byClass[2]
-  accs$sensitivity[i] = CM$byClass[1]
-  accs$seed[i] = i
+  trainIndices = sample(1:dim(variables_graphed)[1],round(splitPerc * dim(variables_graphed)[1]))
+  train = variables_graphed[trainIndices,]
+  test = variables_graphed[-trainIndices,]
+# run KNN algorithm 
+
+  classifications = knn(train[,c(32,33,15,20,21,22,23,24,25,26,27,28)],test[,c(32,33,15,20,21,22,23,24,25,26,27,28)],train$Attrition, prob = TRUE, k = 7)
+  #print(table(test$Attrition,classifications))
+  tryCatch({ CM <- confusionMatrix(table(test$Attrition,classifications))
+    accs1$accuracy[i] = CM$overall[1]
+    accs1$specificity[i] = CM$byClass[2]
+    accs1$sensitivity[i] = CM$byClass[1]
+    accs1$seed[i] = i}, 
+    error = function(e) {
+    accs1$accuracy[i] = 0
+    accs1$specificity[i] = 0
+    accs1$sensitivity[i] = 0
+    accs1$seed[i] = 0
+    })
+  #CM <- confusionMatrix(table(test$Attrition,classifications))
 }
-summary(accs)
+accs1
+summary(accs1)
 
 ```
 
-
-# TESTING BOX ================================================================================================
-```{r}
-#TESTING BOX
-library(caret)
-library(class)
-library(dplyr)
-library(e1071)
-library(FNN) 
-library(gmodels) 
-library(psych)
-
-prepped_df <- subset(variables_graphed, select = -c(JobRole, MaritalStatus, OverTime, JobLevel, JobInvolvement, StockOptionLevel, WorkLifeBalance))
-need_dummycode <- c("JobRole", "MaritalStatus", "OverTime", "JobLevel", "JobInvolvement", "StockOptionLevel", "WorkLifeBalance")
-for (val in need_dummcode) {
-  temp <- as.data.frame(dummy.code(data[["JobRole"]]))
-  prepped_df <- cbind(prepped_df, temp)
-}
-head(prepped_df)
-```
 
 ## Data Conclusions
 ***
@@ -237,12 +268,28 @@ head(prepped_df)
 Attrition is defined as reducing/preventing voluntary employee turnover. Here, if the value is no, this means that the employee was not lost, and yes means that the company did lose the employee. 
 
 #### Factors that Lead to Attrition
-```{r}
-
-```
+While many factors were considered to lead to attrition, it was determined that the top 3 factors are 
+1. Monthly Income
+2. Over Time
+3. Job Role
 
 #### Model for Attrition Prediction
+The final model takes into account all three factors, with a mean specificity of 0.61 and sensitivity of 0.87 at K-7.
 ```{r}
+# select desired columns from the data sets 
+training_set <- train %>% select(c("OverTime", "JobRole", "MonthlyIncome"))
+testing_set <- test %>% select(c("OverTime", "JobRole", "MonthlyIncome"))
+
+#since the data needs to be dummy coded for categorical, the following is more accurate
+training <- train[,c(32,33,15,20,21,22,23,24,25,26,27,28)]
+testing<- test[,c(32,33,15,20,21,22,23,24,25,26,27,28)]
+
+# run the data
+CM <- knn(training,testing,train$Attrition, prob = TRUE, k = 7)
+
+# save the column to the desired dataset
+testing$prediction<- CM
+
 
 ```
 
@@ -251,15 +298,39 @@ At minimum, the attrition should be at 60% and the sensitivity should be 60%.
 Aftering running the model to recieve predicted attrition values, the dataset was ordered by id and exported to a csv. 
 ```{r}
 # load in the attrition data
-#attrition_competition = read.csv("../data_sets/CaseStudy2CompSet No Attrition.csv", header=TRUE)
+attrition_competition = read.csv("../data_sets/CaseStudy2CompSet No Attrition.csv", header=TRUE)
 
 
 # order by id
-#attach(attrition_competition)
-#attrition_competition_ordered <- attrition_competition[order(ID),]
+attach(attrition_competition)
+attrition_competition_ordered <- attrition_competition[order(ID),]
+colnames(attrition_competition_ordered)
+# run predictions on the competition model
 
+# 1. dummy code data
+need_dummycodes <- c("JobRole", "OverTime")
+for (val in need_dummycodes) {
+  temp <- as.data.frame(dummy.code(attrition_competition_ordered[[val]]))
+  attrition_competition_ordered <- cbind(attrition_competition_ordered, temp)
+}
+
+# 2. Scale the monthly income
+attrition_competition_ordered$MonthlyIncomeScaled <- scale(attrition_competition_ordered$MonthlyIncome)
+
+# 3. pull the train and validation sets
+training <- train[,c(32,33,15,20,21,22,23,24,25,26,27,28)]
+testing <- attrition_competition_ordered %>% select(c("Research Scientist","Sales Executive","Laboratory Technician","Manufacturing Director","Manager","Healthcare Representative","Research Director","Sales Representative","Human Resources","No","Yes","MonthlyIncomeScaled"))
+
+# 4. Run the model to get predictions
+CM <- knn(training,testing,train$Attrition, prob = TRUE, k = 7)
+
+# 5. save the column to the desired dataset
+attrition_competition_ordered$Attrition<- CM
+
+# 6. filter for desired columns
+output_attrition <- attrition_competition_ordered %>% select(c("ID", "Attrition"))
 # export the attrition predicted data
-#write.csv(attrition_competition_ordered, "../data_sets/output_data_sets/Case2Predictions_JamieVo Attrition.csv")
+write.csv(output_attrition, "../data_sets/output_data_sets/Case2Predictions_JamieVo Attrition.csv")
 
 ```
 
@@ -286,10 +357,6 @@ The model attains a RMSE < $3000 for the training and the validation set.
 #write.csv(monthly_income_competition_ordered, "../data_sets/output_data_sets/Case2Predictions_JamieVo Salary.csv")
 ```
 
-#### Top 3 Factors that Lead to Turnover
-```{r}
-
-```
 
 #### Job Specific Trends
 ```{r}
