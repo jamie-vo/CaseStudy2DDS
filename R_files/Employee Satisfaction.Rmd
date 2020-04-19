@@ -1,5 +1,5 @@
 ---
-title: "Employee Satisfaction"
+title: "Employee-Satisfaction-DDAnalytics"
 author: "Jamie Vo"
 date: "4/14/2020"
 output: html_document
@@ -58,7 +58,7 @@ cleaning would be required.
 distinct_df<-distinct(data, EmployeeNumber)
 
 # check for complete observations 
-df[complete.cases(data), ]
+#df[complete.cases(data), ]
 
 ```
 
@@ -175,7 +175,6 @@ for (val in need_dummycode) {
   temp <- as.data.frame(dummy.code(data[[val]]))
   variables_graphed <- cbind(variables_graphed, temp)
 }
-colnames(variables_graphed)
 ```
 
 
@@ -218,11 +217,6 @@ for(i in 1:20)
 }
 accs
 plot(accs$k,accs$accuracy, type = "l", xlab = "k", main="K Iterations and Accuracy") 
-
-colnames(variables_graphed)
-
-train[,c(1,2,3)]
-train[,c(1,2,7)]
 ```
 
 ##### Test KNN against different seeds
@@ -264,6 +258,11 @@ summary(accs1)
 
 ```
 
+```{r}
+ggplot(data = data, aes(x=JobRole, y=MonthlyIncome, color=Attrition)) + geom_point(position="jitter") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggplot(data = data, aes(x=OverTime, y=MonthlyIncome, z=JobRole, color=Attrition)) + geom_point(position="jitter")
+```
+
 
 ## Data Conclusions
 ***
@@ -293,13 +292,12 @@ CM <- knn(training,testing,train$Attrition, prob = TRUE, k = 7)
 # save the column to the desired dataset
 testing$prediction<- CM
 
-
 ```
 
 ##### Predicting Attrition
 At minimum, the attrition should be at 60% and the sensitivity should be 60%.
 Aftering running the model to recieve predicted attrition values, the dataset was ordered by id and exported to a csv. 
-```{r}
+```{r,warning=FALSE,message=FALSE}
 # load in the attrition data
 attrition_competition = read.csv("../data_sets/CaseStudy2CompSet No Attrition.csv", header=TRUE)
 
@@ -307,7 +305,7 @@ attrition_competition = read.csv("../data_sets/CaseStudy2CompSet No Attrition.cs
 # order by id
 attach(attrition_competition)
 attrition_competition_ordered <- attrition_competition[order(ID),]
-colnames(attrition_competition_ordered)
+
 # run predictions on the competition model
 
 # 1. dummy code data
@@ -360,7 +358,7 @@ After running a stepwise regression model, its noted that the factors that most 
 * Job Role
 
 3. The final model that was the simplest contains JobLevel + TotalWorkingYears + Travel_Rarel.
-```{r}
+```{r,warning=FALSE,message=FALSE}
 # 1. dummy code all the data 
 dummy_code2 <- c("BusinessTravel","Department","EducationField","Gender","JobRole","MaritalStatus","OverTime")
 for (val in dummy_code2) {
@@ -375,7 +373,9 @@ names(data)<-make.names(names(data),unique = TRUE) # remove spaces from the name
 # 2. initial reduction of factors
 
 scatter.smooth(x=data$TotalWorkingYears, y=data$MonthlyIncome, main="") 
-colnames(data)
+```
+
+```{r,warning=FALSE,message=FALSE, results='hide'}
 
 lm_step1 <- step(lm(MonthlyIncome~Age
  + DailyRate + DistanceFromHome + Education + EmployeeNumber
@@ -393,11 +393,10 @@ lm_step1 <- step(lm(MonthlyIncome~Age
  + Human.Resources + Married + Single + Divorced
  + No + Yes + attrition_no, data = data),direction="both")
 
-
 ```
 An interesting note is that Males are in the model, while females are not. We find that the sex of the candidate 
 affects the model.
-```{r}
+```{r,warning=FALSE,message=FALSE}
 # 3. customizing model and checking all assumptions. Here, the switch 
 
 # split data into train adn test set
@@ -411,7 +410,8 @@ affects the model.
   test = data[-trainIndices,]
 # Add remove any rates considering they likely feed into the monthly income, this is not helpful
 
-
+```
+```{r results='hide'}
 lm_back <- step(lm( MonthlyIncome ~  DistanceFromHome + 
     JobLevel  + PercentSalaryHike + PerformanceRating + 
     TotalWorkingYears + YearsSinceLastPromotion + YearsWithCurrManager + 
@@ -424,7 +424,8 @@ lm_forward <- step(lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + YearsSinceL
     Laboratory.Technician + Manufacturing.Director + Healthcare.Representative + 
     Manager + Research.Director, data = train), direction = "forward")
 
-
+```
+```{r}
 # run the linear regression
 linearMod <- lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + Travel_Rarely, data=train)  # build linear regression model on full data
 print(linearMod)
@@ -440,7 +441,7 @@ summary(linearMod)
 Overall, it can be argued that no major deviations from the assumptions and the linear regression model has a good fit. 
 ```{r}
 # 1, Normality
-
+sresid <- studres(linearMod)
 hist(sresid, freq=FALSE,
    main="Distribution of Studentized Residuals")
 xfit<-seq(min(sresid),max(sresid),length=40)
@@ -448,19 +449,14 @@ yfit<-dnorm(xfit)
 lines(xfit, yfit)
 
 # 2. Constant Variance
-sresid <- studres(linearMod)
+
 plot(sresid) + title("Rediduals for Constant Variance")
 
 # 3. Linearity
-
 ggPredict(linearMod,se=TRUE,interactive=TRUE)
-qqPlot(linearMod, main="QQ Plot") #qq plot for studentized resid
 
 # 4. Outliers 
-outlierTest(linearMod) # Bonferonni p-value for most extreme obs
-
-leveragePlots(linearMod) # leverage plots
-
+plot(linearMod)
 
 
 ```
