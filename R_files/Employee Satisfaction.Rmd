@@ -7,7 +7,7 @@ output: html_document
 
 ## Abstract
 ***
-Checkout the presentation at: ......youtube video link
+Checkout the presentation at: https://youtu.be/cCZ3wZs-RkA
 Attrition is the voluntary loss of employees, and here at DDSAnalytics, we're looking to determine the factors that lead to this. We determined that three primary facors are over time, montly income, and job roles. Due to this, predictors for monthly income were also analyzed. It was determined that traveling, total years worked, and job level were significant indicators. Fianlly, it was noticed that sales reps were of the highest percentage when it came to attrition, and mangers and research directors were amoung the most experienced and bringing in the highest monthly income.
 
 ## Introduction
