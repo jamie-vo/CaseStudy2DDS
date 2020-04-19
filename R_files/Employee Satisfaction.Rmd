@@ -8,11 +8,14 @@ output: html_document
 ## Abstract
 ***
 Checkout the presentation at: ......youtube video link
+Attrition is the voluntary loss of employees, and here at DDSAnalytics, we're looking to determine the factors that lead to this. We determined that three primary facors are over time, montly income, and job roles. Due to this, predictors for monthly income were also analyzed. It was determined that traveling, total years worked, and job level were significant indicators. Fianlly, it was noticed that sales reps were of the highest percentage when it came to attrition, and mangers and research directors were amoung the most experienced and bringing in the highest monthly income.
 
 ## Introduction
 ***
+DDSAnalytics is a Fortune 100 company that specializes in talent development. A recent effort for their data science team is to determine predicting factors for turn over rates. The interest lies in the top three factors, and whether there are any trends to specific job roles. The following document shows the effort to determined these high interest variables.
 ## Data Description
 ***
+The dataset recieved contained roughly 33 different factors and over 850 observations. The factors ranged from job related attributes such as departments to personal affairs such as marriage.
 #### Read in the data and load in all the libraries
 ```{r,warning=FALSE,message=FALSE}
 # load in the libraries
@@ -22,6 +25,7 @@ library(plyr)
 library(class)
 library(caret)
 library(e1071)
+library(MASS)
 library(gridExtra)
 library(grid)
 library(ggplot2)
@@ -35,6 +39,9 @@ library(dplyr)
 library(FNN) 
 library(gmodels) 
 library(psych)
+require(ggiraph)
+require(ggiraphExtra)
+require(plyr)
 
 # read in the dataframe
 data = read.csv("../data_sets/CaseStudy2-data.csv",header = TRUE)
@@ -105,10 +112,6 @@ panel.cor <- function(x, y){
 upper.panel<-function(x, y){
   points(x,y, pch = 1, col = my_cols[continuous$Attrition])
 }
-# Create the plots
-#pairs(continuous[,1:5], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
-#pairs(continuous[,5:14], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
-#pairs(continuous[,10:14], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
 
 # Customize upper panel
 upper.panel<-function(x, y){
@@ -337,53 +340,244 @@ write.csv(output_attrition, "../data_sets/output_data_sets/Case2Predictions_Jami
 ### Monthly Incomes
 
 #### Model for Monthly Incomes
+
+1. First scatter plots are run to determine the relationship and predictors for the monthly income. This is also tested by using the initial data set. From the first model, its seen that 
+
+* intitially, there appears to be a linear relationship between total working years and monthly income.
+
+2. running a stepwise linear regression to narrow down the factors, the following were found to be significant.
+After running a stepwise regression model, its noted that the factors that most attribute to Monly income is 
+* Business Travel
+* Performance rating
+* Percent Salary Hike
+* Years Since Last promotion 
+* Gender (Male)
+* Job Level 
+* Total Years Working
+* Years with current Manager
+* Daily Rate
+* Distance from Home
+* Job Role
+
+3. The final model that was the simplest contains JobLevel + TotalWorkingYears + Travel_Rarel.
 ```{r}
+# 1. dummy code all the data 
+dummy_code2 <- c("BusinessTravel","Department","EducationField","Gender","JobRole","MaritalStatus","OverTime")
+for (val in dummy_code2) {
+  temp <- as.data.frame(dummy.code(data[[val]]))
+  data <- cbind(data, temp)
+}
+
+data$attrition_no <- ifelse(data$Attrition =="No", 1, 0) #dummy code attrition
+
+names(data)<-make.names(names(data),unique = TRUE) # remove spaces from the name
+
+# 2. initial reduction of factors
+
+scatter.smooth(x=data$TotalWorkingYears, y=data$MonthlyIncome, main="") 
+colnames(data)
+
+lm_step1 <- step(lm(MonthlyIncome~Age
+ + DailyRate + DistanceFromHome + Education + EmployeeNumber
+ + EnvironmentSatisfaction + HourlyRate + JobInvolvement + JobLevel
+ + JobSatisfaction + MonthlyRate + NumCompaniesWorked
+ + PercentSalaryHike + PerformanceRating + RelationshipSatisfaction + StandardHours
+ + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + WorkLifeBalance
+ + YearsAtCompany + YearsInCurrentRole + YearsSinceLastPromotion + YearsWithCurrManager
+ + Travel_Rarely + Travel_Frequently
+ + Non.Travel + Research...Development + Sales + Human.Resources
+ + Life.Sciences + Medical + Marketing + Technical.Degree
+ + Other + Human.Resources + Male + Female
+ + Sales.Executive + Research.Scientist + Laboratory.Technician + Manufacturing.Director
+ + Healthcare.Representative + Sales.Representative + Manager + Research.Director
+ + Human.Resources + Married + Single + Divorced
+ + No + Yes + attrition_no, data = data),direction="both")
+
 
 ```
+An interesting note is that Males are in the model, while females are not. We find that the sex of the candidate 
+affects the model.
+```{r}
+# 3. customizing model and checking all assumptions. Here, the switch 
+
+# split data into train adn test set
+  set.seed(8)
+  splitPerc = .80
+  
+  
+  #split data
+  trainIndices = sample(1:dim(data)[1],round(splitPerc * dim(data)[1]))
+  train = data[trainIndices,]
+  test = data[-trainIndices,]
+# Add remove any rates considering they likely feed into the monthly income, this is not helpful
+
+
+lm_back <- step(lm( MonthlyIncome ~  DistanceFromHome + 
+    JobLevel  + PercentSalaryHike + PerformanceRating + 
+    TotalWorkingYears + YearsSinceLastPromotion + YearsWithCurrManager + 
+    Travel_Rarely + Travel_Frequently + Male + Sales.Executive + 
+    Laboratory.Technician + Manufacturing.Director + Healthcare.Representative + 
+    Manager + Research.Director, data = train), direction = "backward")
+
+lm_forward <- step(lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + YearsSinceLastPromotion + 
+    YearsWithCurrManager + Travel_Rarely + Male + Sales.Executive + 
+    Laboratory.Technician + Manufacturing.Director + Healthcare.Representative + 
+    Manager + Research.Director, data = train), direction = "forward")
+
+
+# run the linear regression
+linearMod <- lm(MonthlyIncome ~ JobLevel + TotalWorkingYears + Travel_Rarely, data=train)  # build linear regression model on full data
+print(linearMod)
+summary(linearMod) 
+```
+### Assumptions for linear regression
+
+1. Normality
+2. Constant Variance
+3. Linearity
+4. Outliers
+
+Overall, it can be argued that no major deviations from the assumptions and the linear regression model has a good fit. 
+```{r}
+# 1, Normality
+
+hist(sresid, freq=FALSE,
+   main="Distribution of Studentized Residuals")
+xfit<-seq(min(sresid),max(sresid),length=40)
+yfit<-dnorm(xfit)
+lines(xfit, yfit)
+
+# 2. Constant Variance
+sresid <- studres(linearMod)
+plot(sresid) + title("Rediduals for Constant Variance")
+
+# 3. Linearity
+
+ggPredict(linearMod,se=TRUE,interactive=TRUE)
+qqPlot(linearMod, main="QQ Plot") #qq plot for studentized resid
+
+# 4. Outliers 
+outlierTest(linearMod) # Bonferonni p-value for most extreme obs
+
+leveragePlots(linearMod) # leverage plots
+
+
+
+```
+
+### Full Statistics
+
+```{r}
+
+  
+# prediction of the model
+require(graphics)
+pred <- predict(linearMod, test)
+
+
+actuals_preds <- data.frame(cbind(actuals=test$MonthlyIncome, predicteds=pred))  # make actuals_predicteds dataframe.
+correlation_accuracy <- cor(actuals_preds)  # 94.38%
+head(actuals_preds)
+
+summary(linearMod)
+
+# Calculate RMSE
+RSS <- c(crossprod(linearMod$residuals))
+MSE <- RSS / length(linearMod$residuals)
+RMSE <- sqrt(MSE)
+```
+
 
 
 ##### Predicting Monthly Incomes
 The model attains a RMSE < $3000 for the training and the validation set.
 ```{r}
 # load in the monthly income data
-#monthly_income_competition = read.csv("../data_sets/CaseStudy2CompSet No Salary.csv", header=TRUE)
+monthly_income_competition = read.csv("../data_sets/CaseStudy2CompSet No Salary.csv", header=TRUE)
 
 
 # order by id
-#attach(attrition_competition)
-#monthly_income_competition_ordered <- monthly_income_competition[order(ID),]
+attach(attrition_competition)
+monthly_income_competition_ordered <- monthly_income_competition[order(ID),]
+
+# transform the data
+# 1. dummy code all the data 
+dummy_code2 <- c("BusinessTravel","Department","EducationField","Gender","JobRole","MaritalStatus","OverTime")
+for (val in dummy_code2) {
+  temp <- as.data.frame(dummy.code(monthly_income_competition_ordered[[val]]))
+  monthly_income_competition_ordered <- cbind(monthly_income_competition_ordered, temp)
+}
+
+# predict the values
+pred <- predict(linearMod, monthly_income_competition_ordered)
+
+monthly_income_competition_ordered$MonthlyIncome = pred
+
+output1<- as.data.frame(cbind(ID=monthly_income_competition_ordered$ID, MonthlyIncome=monthly_income_competition_ordered$MonthlyIncome))
 
 # export the attrition predicted data
-#write.csv(monthly_income_competition_ordered, "../data_sets/output_data_sets/Case2Predictions_JamieVo Salary.csv")
+write.csv(output1, "../data_sets/output_data_sets/Case2Predictions_JamieVo Salary.csv")
 ```
 
 
 #### Job Specific Trends
+In term of job specific roles, the following trends were nnocied:
+ 
 ```{r}
+#compare the plots with attrition being the explainatory factor (Categorical)
+data$JobF <- as.factor(data$JobRole)
+categorical_variables = colnames(categorical)
+variables <- c(
+"Attrition","BusinessTravel","EducationField"          
+,"Gender","MaritalStatus","OverTime"                
+,"JobLevel","JobSatisfaction","JobInvolvement","PerformanceRating"       
+,"RelationshipSatisfaction","StockOptionLevel","NumCompaniesWorked","TrainingTimesLastYear"   
+,"WorkLifeBalance","Education","YearsInCurrentRole","EnvironmentSatisfaction" )
+graphing <- function(data, variables) {
+  for (val in variables) {
+    plot <- ggplot(data=data)+aes_string(val)+geom_bar(aes(fill=as.factor(JobF)), position="fill")+ ggtitle(glue("{val}"))
+    print(plot)
+  }
+}
+graphing(data, variables)
 
+# numerical data
+continuous <- subset(data, select = c(ID, Age, JobRole, DailyRate, DistanceFromHome, EmployeeNumber, HourlyRate, MonthlyIncome, MonthlyRate, PercentSalaryHike, TotalWorkingYears, YearsAtCompany, YearsSinceLastPromotion, YearsWithCurrManager, StandardHours) )
+# differentiate colors by attrition
+my_cols <- c("#00AFBB", "#E7B800", "#F0F8FF", "#8FBC8F", "#483D8B", "#00008B", "#006400", "#B8860B", "#A52A2A") 
+
+
+# Correlation panel
+panel.cor <- function(x, y){
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- round(cor(x, y), digits=2)
+    txt <- paste0("R = ", r)
+    cex.cor <- 0.8/strwidth(txt)
+    text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+# Customize upper panel
+upper.panel<-function(x, y){
+  points(x,y, pch = 1, col = my_cols[continuous$JobRole])
+}
+
+# Customize upper panel
+upper.panel<-function(x, y){
+  points(x,y, pch = 1, col = my_cols[continuous$JobRole])
+}
+pairs(continuous[,1:5], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+pairs(continuous[,5:10], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. business
+pairs(continuous[,10:15], lower.panel = panel.cor, upper.panel = upper.panel) # age vs. busine
+
+ggplot(data, aes(x=TotalWorkingYears, y=MonthlyIncome, color=JobRole)) + geom_point()
 ```
 
-#### Additional Trends
-```{r}
+There does appear to be a trend that Reserach directors and Managers tend to work more total years, and hence, have higher monthly incomes. There is a stronger cluster of sales reps and technicians on the lower end of total working years and monthly income. This may, and hopefully be due to the fact that they've moved onto management and or higher roles.
 
-```
+### Conclusion
 
-```{r}
+In conclusion, it was determined that the three factors that provide high specificity and sensitivity to attrition are monhtly salary, overtime, and job role. Those who worked over time tended to have higher attrition rates, along with those in the lower brackets of monthly oncome. As for job roles, it can be seen in the graphs above that sales reps have high attrition rate. The KNN model designed looked a the nearest 7 neighbors to determine the attrition classification, resulting in ~60% sensitivity and ~87% specificity.
 
-```
+The most important predictors for monthly income is whether the employee rarely travels, their job level and their total years working. This is intuitive, but interesting to see that there essentially wasn't a major emphasis on role. The multiple linear regression model showed that roughly 91% of the montly income could be explained by the variables included, with an RMSE of ~$1400.00.
 
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
+For job specific roles, there were not major trends noticed in the initial analysis. An interesting point is that Research Directors and Managers tend to have worked a greater number of total years and monthly income. The cluster of sales and technicians towards lower work years and monthly income would hopefully be explained by their movement up into management. 
